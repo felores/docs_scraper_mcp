@@ -14,6 +14,9 @@ from .crawlers.multi_url_crawler import MultiURLCrawler
 from .crawlers.sitemap_crawler import SitemapCrawler
 from .crawlers.menu_crawler import MenuCrawler
 
+# Import utility classes
+from .utils import RequestHandler, HTMLParser
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -82,13 +85,17 @@ async def single_url_crawler(
             rate_limit=rate_limit
         )
         
-        crawler = SingleURLCrawler(
-            url=str(input_data.url),  # Convert HttpUrl to str
-            depth=input_data.depth,
-            exclusion_patterns=input_data.exclusion_patterns,
-            rate_limit=input_data.rate_limit
-        )
-        return await crawler.crawl()
+        # Create required utility instances
+        request_handler = RequestHandler(rate_limit=input_data.rate_limit)
+        html_parser = HTMLParser(base_url=str(input_data.url))
+        
+        # Create the crawler with the proper parameters
+        crawler = SingleURLCrawler(request_handler=request_handler, html_parser=html_parser)
+        
+        # Use request_handler as a context manager to ensure proper session initialization
+        async with request_handler:
+            # Call the crawl method with the URL
+            return await crawler.crawl(str(input_data.url))
         
     except Exception as e:
         logger.error(f"Single URL crawler failed: {str(e)}")
@@ -131,13 +138,23 @@ async def multi_url_crawler(
             rate_limit=rate_limit
         )
         
-        crawler = MultiURLCrawler(
-            urls=[str(url) for url in input_data.urls],  # Convert HttpUrls to str
-            concurrent_limit=input_data.concurrent_limit,
-            exclusion_patterns=input_data.exclusion_patterns,
-            rate_limit=input_data.rate_limit
-        )
-        return await crawler.crawl()
+        # Create the crawler with the proper parameters
+        crawler = MultiURLCrawler(verbose=True)
+        
+        # Call the crawl method with the URLs
+        url_list = [str(url) for url in input_data.urls]
+        results = await crawler.crawl(url_list)
+        
+        # Return a standardized response format
+        return {
+            "success": True,
+            "results": results,
+            "stats": {
+                "urls_crawled": len(results),
+                "urls_succeeded": sum(1 for r in results if r["success"]),
+                "urls_failed": sum(1 for r in results if not r["success"])
+            }
+        }
         
     except Exception as e:
         logger.error(f"Multi URL crawler failed: {str(e)}")
@@ -183,14 +200,36 @@ async def sitemap_crawler(
             rate_limit=rate_limit
         )
         
-        crawler = SitemapCrawler(
-            base_url=str(input_data.base_url),  # Convert HttpUrl to str
-            sitemap_url=str(input_data.sitemap_url) if input_data.sitemap_url else None,
-            concurrent_limit=input_data.concurrent_limit,
-            exclusion_patterns=input_data.exclusion_patterns,
-            rate_limit=input_data.rate_limit
+        # Create required utility instances
+        request_handler = RequestHandler(
+            rate_limit=input_data.rate_limit,
+            concurrent_limit=input_data.concurrent_limit
         )
-        return await crawler.crawl()
+        html_parser = HTMLParser(base_url=str(input_data.base_url))
+        
+        # Create the crawler with the proper parameters
+        crawler = SitemapCrawler(
+            request_handler=request_handler,
+            html_parser=html_parser,
+            verbose=True
+        )
+        
+        # Determine the sitemap URL to use
+        sitemap_url_to_use = str(input_data.sitemap_url) if input_data.sitemap_url else f"{str(input_data.base_url).rstrip('/')}/sitemap.xml"
+        
+        # Call the crawl method with the sitemap URL
+        results = await crawler.crawl(sitemap_url_to_use)
+        
+        return {
+            "success": True,
+            "content": results,
+            "stats": {
+                "urls_crawled": len(results),
+                "urls_succeeded": sum(1 for r in results if r["success"]),
+                "urls_failed": sum(1 for r in results if not r["success"]),
+                "sitemap_found": len(results) > 0
+            }
+        }
         
     except Exception as e:
         logger.error(f"Sitemap crawler failed: {str(e)}")
@@ -236,14 +275,21 @@ async def menu_crawler(
             rate_limit=rate_limit
         )
         
-        crawler = MenuCrawler(
-            base_url=str(input_data.base_url),  # Convert HttpUrl to str
-            menu_selector=input_data.menu_selector,
-            concurrent_limit=input_data.concurrent_limit,
-            exclusion_patterns=input_data.exclusion_patterns,
-            rate_limit=input_data.rate_limit
-        )
-        return await crawler.crawl()
+        # Create the crawler with the proper parameters
+        crawler = MenuCrawler(start_url=str(input_data.base_url))
+        
+        # Call the crawl method
+        results = await crawler.crawl()
+        
+        return {
+            "success": True,
+            "content": results,
+            "stats": {
+                "urls_crawled": len(results.get("menu_links", [])),
+                "urls_failed": 0,
+                "menu_items_found": len(results.get("menu_structure", {}).get("items", []))
+            }
+        }
         
     except Exception as e:
         logger.error(f"Menu crawler failed: {str(e)}")

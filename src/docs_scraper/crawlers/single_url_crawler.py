@@ -42,30 +42,30 @@ class SingleURLCrawler:
         """
         try:
             response = await self.request_handler.get(url)
-            if response.status != 200:
+            if not response["success"]:
                 return {
                     "success": False,
                     "url": url,
                     "content": None,
                     "metadata": {},
                     "links": [],
-                    "status_code": response.status,
-                    "error": f"HTTP {response.status}"
+                    "status_code": response.get("status"),
+                    "error": response.get("error", "Unknown error")
                 }
             
-            html_content = await response.text()
-            parsed_content = self.html_parser.parse(html_content)
+            html_content = response["content"]
+            parsed_content = self.html_parser.parse_content(html_content)
             
             return {
                 "success": True,
                 "url": url,
-                "content": parsed_content.content,
+                "content": parsed_content["text_content"],
                 "metadata": {
-                    "title": parsed_content.title,
-                    "description": parsed_content.description
+                    "title": parsed_content["title"],
+                    "description": parsed_content["description"]
                 },
-                "links": parsed_content.links,
-                "status_code": response.status,
+                "links": parsed_content["links"],
+                "status_code": response["status"],
                 "error": None
             }
             
