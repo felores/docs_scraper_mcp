@@ -1,0 +1,124 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+ # Docs Scraper MCP Server Implementation Plan
+
+## Overview
+Building an MCP server that provides web crawling capabilities through 4 distinct tools:
+- menu_crawler: Crawls through menu/navigation structures
+- multi_url_crawler: Crawls multiple URLs in parallel
+- single_url_crawler: Crawls a single URL thoroughly
+- sitemap_url_crawler: Crawls based on sitemap.xml
+
+## Step 1: Project Setup (PLAN MODE)
+- [ ] Create virtual environment
+- [ ] Install core dependencies:
+  - mcp (MCP SDK)
+  - beautifulsoup4 (HTML parsing)
+  - requests (HTTP requests)
+  - lxml (XML parsing for sitemaps)
+  - aiohttp (Async HTTP)
+  - typing-extensions (Type hints)
+  - pydantic (Data validation)
+
+## Step 2: Core Implementation (ACT MODE)
+1. Project Structure
+   ```
+   docs_scraper_mcp/
+   ├── src/
+   │   └── docs_scraper/
+   │       ├── __init__.py
+   │       ├── server.py
+   │       ├── crawlers/
+   │       │   ├── __init__.py
+   │       │   ├── menu_crawler.py
+   │       │   ├── multi_url_crawler.py
+   │       │   ├── single_url_crawler.py
+   │       │   └── sitemap_crawler.py
+   │       └── utils/
+   │           ├── __init__.py
+   │           ├── html_parser.py
+   │           └── request_handler.py
+   ├── tests/
+   │   └── test_crawlers/
+   ├── pyproject.toml
+   └── README.md
+   ```
+
+2. Implementation Order
+   - [ ] Create base request handler with rate limiting
+   - [ ] Implement HTML parser utility
+   - [ ] Develop single_url_crawler (simplest)
+   - [ ] Build sitemap_url_crawler
+   - [ ] Create multi_url_crawler with parallel processing
+   - [ ] Implement menu_crawler with navigation parsing
+   - [ ] Add comprehensive logging
+   - [ ] Add type definitions
+   - [ ] Implement error handling
+
+3. Tool Specifications
+   a. single_url_crawler
+      - Input: URL, depth, exclusion patterns
+      - Output: Structured content with metadata
+      
+   b. sitemap_url_crawler
+      - Input: Base URL or sitemap URL
+      - Output: List of crawled pages with content
+      
+   c. multi_url_crawler
+      - Input: List of URLs, concurrent limit
+      - Output: Batch results with status
+      
+   d. menu_crawler
+      - Input: Base URL, menu selector
+      - Output: Menu structure with crawled content
+
+## Step 3: Testing (BLOCKER ⛔️)
+1. Unit Tests
+   - [ ] Test each crawler independently
+   - [ ] Verify rate limiting
+   - [ ] Test error handling
+   - [ ] Validate output formats
+
+2. Integration Tests
+   - [ ] Test MCP server initialization
+   - [ ] Verify tool registration
+   - [ ] Test concurrent operations
+   - [ ] Validate memory usage
+
+3. Performance Tests
+   - [ ] Measure crawling speed
+   - [ ] Monitor resource usage
+   - [ ] Test with various website sizes
+   - [ ] Verify rate limiting effectiveness
+
+## Step 4: Documentation
+- [ ] Add docstrings to all functions
+- [ ] Create usage examples
+- [ ] Document rate limiting configuration
+- [ ] Add error handling guide
+
+## Step 5: Security Considerations
+- [ ] Implement robots.txt compliance
+- [ ] Add user-agent configuration
+- [ ] Implement request throttling
+- [ ] Add domain allowlist/blocklist
+- [ ] Secure credential handling
+
+## Step 6: Completion
+❗ STOP AND VERIFY:
+□ All tools tested with valid inputs
+□ Output format verified for each tool
+□ Rate limiting confirmed working
+□ Error handling tested
+□ Security measures validated
+
+## Key Requirements
+- ✓ Must use MCP SDK
+- ✓ Must implement comprehensive logging
+- ✓ Must handle rate limiting
+- ✓ Must respect robots.txt
+- ✓ Must implement proper error handling
+- ⛔️ NEVER skip testing before completion
