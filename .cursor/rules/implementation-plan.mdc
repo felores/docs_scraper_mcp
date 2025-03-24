@@ -1,9 +1,4 @@
----
-description: 
-globs: 
-alwaysApply: true
----
- # Docs Scraper MCP Server Implementation Plan
+# Docs Scraper MCP Server Implementation Plan
 
 ## Overview
 Building an MCP server that provides web crawling capabilities through 4 distinct tools:
@@ -121,4 +116,4 @@ Building an MCP server that provides web crawling capabilities through 4 distinc
 - ✓ Must handle rate limiting
 - ✓ Must respect robots.txt
 - ✓ Must implement proper error handling
-- ⛔️ NEVER skip testing before completion
+- ⛔️ NEVER skip testing before completion 
