@@ -202,7 +202,7 @@ def get_filename_prefix(url: str) -> str:
         print(colored(f"Error generating filename prefix: {str(e)}", "red"))
         return "default"
 
-class DocsMenuCrawler:
+class MenuCrawler:
     def __init__(self, start_url: str):
         self.start_url = start_url
         
@@ -404,7 +404,7 @@ async def main():
             global MENU_SELECTORS
             MENU_SELECTORS = args.selectors
 
-        crawler = DocsMenuCrawler(args.url)
+        crawler = MenuCrawler(args.url)
         await crawler.crawl()
     except Exception as e:
         print(colored(f"Error in main: {str(e)}", "red"))

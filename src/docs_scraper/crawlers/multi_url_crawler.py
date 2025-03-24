@@ -64,7 +64,7 @@ def load_urls_from_file(file_path: str) -> List[str]:
         print(colored(f"Error loading URLs from file: {str(e)}", "red"))
         sys.exit(1)
 
-class MultiUrlCrawler:
+class MultiURLCrawler:
     def __init__(self, verbose: bool = True):
         self.browser_config = BrowserConfig(
             headless=True,
@@ -269,7 +269,7 @@ async def main():
         print(colored(f"Found {len(urls)} URLs to crawl", "green"))
         
         # Initialize and run crawler
-        crawler = MultiUrlCrawler(verbose=True)
+        crawler = MultiURLCrawler(verbose=True)
         results = await crawler.crawl(urls)
         
         # Save results to markdown file - only pass output_prefix if explicitly set

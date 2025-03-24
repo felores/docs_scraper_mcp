@@ -6,6 +6,79 @@ import argparse
 from datetime import datetime
 from termcolor import colored
 from crawl4ai import *
+from ..utils import RequestHandler, HTMLParser
+from typing import Dict, Any, Optional
+
+class SingleURLCrawler:
+    """A crawler that processes a single URL."""
+    
+    def __init__(self, request_handler: RequestHandler, html_parser: HTMLParser):
+        """
+        Initialize the crawler.
+        
+        Args:
+            request_handler: Handler for making HTTP requests
+            html_parser: Parser for processing HTML content
+        """
+        self.request_handler = request_handler
+        self.html_parser = html_parser
+    
+    async def crawl(self, url: str) -> Dict[str, Any]:
+        """
+        Crawl a single URL and extract its content.
+        
+        Args:
+            url: The URL to crawl
+            
+        Returns:
+            Dict containing:
+                - success: Whether the crawl was successful
+                - url: The URL that was crawled
+                - content: The extracted content (if successful)
+                - metadata: Additional metadata about the page
+                - links: Links found on the page
+                - status_code: HTTP status code
+                - error: Error message (if unsuccessful)
+        """
+        try:
+            response = await self.request_handler.get(url)
+            if response.status != 200:
+                return {
+                    "success": False,
+                    "url": url,
+                    "content": None,
+                    "metadata": {},
+                    "links": [],
+                    "status_code": response.status,
+                    "error": f"HTTP {response.status}"
+                }
+            
+            html_content = await response.text()
+            parsed_content = self.html_parser.parse(html_content)
+            
+            return {
+                "success": True,
+                "url": url,
+                "content": parsed_content.content,
+                "metadata": {
+                    "title": parsed_content.title,
+                    "description": parsed_content.description
+                },
+                "links": parsed_content.links,
+                "status_code": response.status,
+                "error": None
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "url": url,
+                "content": None,
+                "metadata": {},
+                "links": [],
+                "status_code": None,
+                "error": str(e)
+            }
 
 def get_filename_prefix(url: str) -> str:
     """

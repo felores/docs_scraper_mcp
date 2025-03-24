@@ -3,36 +3,30 @@ import sys
 import asyncio
 import re
 import xml.etree.ElementTree as ET
-import aiohttp
 import argparse
 from typing import List, Optional, Dict
 from datetime import datetime
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
-from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
-from crawl4ai.content_filter_strategy import PruningContentFilter
 from termcolor import colored
+from ..utils import RequestHandler, HTMLParser
 
-class MultiUrlCrawler:
-    def __init__(self, verbose: bool = True):
-        self.browser_config = BrowserConfig(
-            headless=True,
-            verbose=True,
-            viewport_width=800,
-            viewport_height=600
-        )
+class SitemapCrawler:
+    def __init__(self, request_handler: Optional[RequestHandler] = None, html_parser: Optional[HTMLParser] = None, verbose: bool = True):
+        """
+        Initialize the sitemap crawler.
         
-        self.crawler_config = CrawlerRunConfig(
-            cache_mode=CacheMode.BYPASS,
-            markdown_generator=DefaultMarkdownGenerator(
-                content_filter=PruningContentFilter(
-                    threshold=0.48,
-                    threshold_type="fixed",
-                    min_word_threshold=0
-                )
-            ),
-        )
-        
+        Args:
+            request_handler: Optional RequestHandler instance. If not provided, one will be created.
+            html_parser: Optional HTMLParser instance. If not provided, one will be created.
+            verbose: Whether to print progress messages
+        """
         self.verbose = verbose
+        self.request_handler = request_handler or RequestHandler(
+            rate_limit=1.0,
+            concurrent_limit=5,
+            user_agent="DocsScraperBot/1.0",
+            timeout=30
+        )
+        self._html_parser = html_parser
 
     async def fetch_sitemap(self, sitemap_url: str) -> List[str]:
         """
@@ -47,14 +41,14 @@ class MultiUrlCrawler:
         if self.verbose:
             print(f"\nFetching sitemap from: {sitemap_url}")
             
-        async with aiohttp.ClientSession() as session:
+        async with self.request_handler as handler:
             try:
-                async with session.get(sitemap_url) as response:
-                    if response.status != 200:
-                        raise Exception(f"Failed to fetch sitemap: HTTP {response.status}")
-                    
-                    content = await response.text()
-                    
+                response = await handler.get(sitemap_url)
+                if not response["success"]:
+                    raise Exception(f"Failed to fetch sitemap: {response['error']}")
+                
+                content = response["content"]
+                
                 # Parse XML content
                 root = ET.fromstring(content)
                 
@@ -88,7 +82,7 @@ class MultiUrlCrawler:
             except Exception as e:
                 print(f"Error fetching sitemap: {str(e)}")
                 return []
-        
+
     def process_markdown_content(self, content: str, url: str) -> str:
         """Process markdown content to start from first H1 and add URL as H2"""
         # Find the first H1 tag
@@ -120,7 +114,7 @@ class MultiUrlCrawler:
         rest_of_content = '\n'.join(lines[1:]).strip()
         
         return f"{h1_line}\n\n## Source\n{url}\n\n{rest_of_content}"
-        
+
     def save_markdown_content(self, results: List[dict], filename_prefix: str = "vercel_ai_docs"):
         """Save all markdown content to a single file"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -134,7 +128,7 @@ class MultiUrlCrawler:
             for result in results:
                 if result["success"]:
                     processed_content = self.process_markdown_content(
-                        result["markdown_content"],
+                        result["content"],
                         result["url"]
                     )
                     f.write(processed_content)
@@ -144,57 +138,85 @@ class MultiUrlCrawler:
             print(f"\nMarkdown content saved to: {filepath}")
         return filepath
 
-    async def crawl(self, urls: List[str]) -> List[dict]:
+    async def crawl(self, sitemap_url: str) -> List[dict]:
         """
-        Crawl multiple URLs sequentially using session reuse for optimal performance
+        Crawl a sitemap URL and all URLs it contains.
+        
+        Args:
+            sitemap_url: URL of the sitemap to crawl
+            
+        Returns:
+            List of dictionaries containing crawl results
         """
         if self.verbose:
             print("\n=== Starting Crawl ===")
-            total_urls = len(urls)
-            print(f"Total URLs to crawl: {total_urls}")
+        
+        # First fetch all URLs from the sitemap
+        urls = await self.fetch_sitemap(sitemap_url)
+        
+        if self.verbose:
+            print(f"Total URLs to crawl: {len(urls)}")
 
         results = []
-        async with AsyncWebCrawler(config=self.browser_config) as crawler:
-            session_id = "crawl_session"  # Reuse the same session for all URLs
+        async with self.request_handler as handler:
             for idx, url in enumerate(urls, 1):
                 try:
                     if self.verbose:
-                        progress = (idx / total_urls) * 100
-                        print(f"\nProgress: {idx}/{total_urls} ({progress:.1f}%)")
+                        progress = (idx / len(urls)) * 100
+                        print(f"\nProgress: {idx}/{len(urls)} ({progress:.1f}%)")
                         print(f"Crawling: {url}")
                     
-                    result = await crawler.arun(
-                        url=url,
-                        config=self.crawler_config,
-                        session_id=session_id,
-                    )
+                    response = await handler.get(url)
+                    html_parser = self._html_parser or HTMLParser(url)
                     
-                    results.append({
-                        "url": url,
-                        "success": result.success,
-                        "content_length": len(result.markdown.raw_markdown) if result.success else 0,
-                        "markdown_content": result.markdown.raw_markdown if result.success else "",
-                        "error": result.error_message if not result.success else None
-                    })
-                    
-                    if self.verbose and result.success:
-                        print(f"✓ Successfully crawled URL {idx}/{total_urls}")
-                        print(f"Content length: {len(result.markdown.raw_markdown)} characters")
+                    if response["success"]:
+                        parsed_content = html_parser.parse_content(response["content"])
+                        results.append({
+                            "url": url,
+                            "success": True,
+                            "content": parsed_content["text_content"],
+                            "metadata": {
+                                "title": parsed_content["title"],
+                                "description": parsed_content["description"]
+                            },
+                            "links": parsed_content["links"],
+                            "status_code": response["status"],
+                            "error": None
+                        })
+                        
+                        if self.verbose:
+                            print(f"✓ Successfully crawled URL {idx}/{len(urls)}")
+                            print(f"Content length: {len(parsed_content['text_content'])} characters")
+                    else:
+                        results.append({
+                            "url": url,
+                            "success": False,
+                            "content": "",
+                            "metadata": {"title": None, "description": None},
+                            "links": [],
+                            "status_code": response.get("status"),
+                            "error": response["error"]
+                        })
+                        if self.verbose:
+                            print(f"✗ Error crawling URL {idx}/{len(urls)}: {response['error']}")
+                            
                 except Exception as e:
                     results.append({
                         "url": url,
                         "success": False,
-                        "content_length": 0,
-                        "markdown_content": "",
+                        "content": "",
+                        "metadata": {"title": None, "description": None},
+                        "links": [],
+                        "status_code": None,
                         "error": str(e)
                     })
                     if self.verbose:
-                        print(f"✗ Error crawling URL {idx}/{total_urls}: {str(e)}")
+                        print(f"✗ Error crawling URL {idx}/{len(urls)}: {str(e)}")
 
         if self.verbose:
             successful = sum(1 for r in results if r["success"])
             print(f"\n=== Crawl Complete ===")
-            print(f"Successfully crawled: {successful}/{total_urls} URLs")
+            print(f"Successfully crawled: {successful}/{len(urls)} URLs")
 
         return results
 
@@ -258,7 +280,7 @@ async def main():
         print(colored(f"\nFetching sitemap: {args.sitemap_url}", "cyan"))
         
         # Initialize crawler
-        crawler = MultiUrlCrawler(verbose=True)
+        crawler = SitemapCrawler(verbose=True)
         
         # Fetch URLs from sitemap
         urls = await crawler.fetch_sitemap(args.sitemap_url)
@@ -282,7 +304,7 @@ async def main():
             urls = filtered_urls
         
         # Crawl the URLs
-        results = await crawler.crawl(urls)
+        results = await crawler.crawl(args.sitemap_url)
         
         # Save results to markdown file with dynamic name
         filename_prefix = crawler.get_filename_prefix(args.sitemap_url)
